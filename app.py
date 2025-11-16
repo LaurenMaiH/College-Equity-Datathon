@@ -1,6 +1,9 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+from sklearn.preprocessing import MinMaxScaler
+
+
 
 st.set_page_config(
     page_title="Affordability Reality Engine",
@@ -96,12 +99,6 @@ def main():
         college_ids = filtered_df["UNIQUE_IDENTIFICATION_NUMBER_OF_THE_INSTITUTION"].tolist()
         return college_ids
         
-    #     if num_undergrads <= 5000:
-    #   return 'Small'
-    # elif num_undergrads <= 15000:
-    #   return 'Medium'
-    # else:
-    #   return "Large"
 
     def process_inputs():
         state_colleges = filter_by_state()
@@ -112,14 +109,54 @@ def main():
 
 
 
-        college_ids = set(state_colleges) & set(tuition_colleges) & set(debt_colleges) & set(minority_serving_colleges) & set(size_colleges)
+        college_ids = list(set(set(state_colleges) & set(tuition_colleges) & set(debt_colleges) & set(minority_serving_colleges) & set(size_colleges)))
         college_names_df = affordability_df[affordability_df["Unit ID"].isin(college_ids)]
         college_names = list(set(college_names_df["Institution Name"].tolist()))
 
 
-        return college_names
+        return college_ids
 
+    def filter_to_found_colleges(ids):
+        filtered_college = college_selected_raw[college_selected_raw["UNIQUE_IDENTIFICATION_NUMBER_OF_THE_INSTITUTION"].isin(ids)][["UNIQUE_IDENTIFICATION_NUMBER_OF_THE_INSTITUTION","Median Earnings of Students Working and Not Enrolled 10 Years After Entry", "Median Debt for Dependent Students","Median Debt for Independent Students","Average In-State Tuition for First-Time, Full-Time Undergraduates","Out-of-State Average Tuition for First-Time, Full-Time Undergraduates","Average Amount of Loans Awarded to First-Time, Full-Time Undergraduates","Average Amount of Federal Grant Aid Awarded to First-Time, Full-Time Undergraduates","Average Amount of Institutional Grant Aid Awarded to First-Time, Full-Time Undergraduates"]]
+        filtered_affordability = affordability_df[affordability_df["Unit ID"].isin(ids)][["Unit ID","Institution Name","MSI Status","Average Work Study Award","Affordability Gap (net price minus income earned working 10 hrs at min wage)","State Abbreviation"]]
+        merged = filtered_college.merge(filtered_affordability, left_on="UNIQUE_IDENTIFICATION_NUMBER_OF_THE_INSTITUTION", right_on="Unit ID", how="inner")
+        #normalize cols
+        numerical_cols = merged.select_dtypes(include=['number']).columns
+        numerical_cols = numerical_cols.drop("UNIQUE_IDENTIFICATION_NUMBER_OF_THE_INSTITUTION")
+        scaler = MinMaxScaler()
+        merged[numerical_cols] = scaler.fit_transform(merged[numerical_cols])
+        
+        return merged
+    
+    def score_and_rank_schools(merged_df, user_weights, column_directions):
 
+        df = merged_df.copy()
+        
+        # Identify numeric columns to normalize (skip ignored columns)
+        numeric_cols = df.select_dtypes(include=["number"]).columns
+        numerical_cols = numeric_cols.drop("UNIQUE_IDENTIFICATION_NUMBER_OF_THE_INSTITUTION")
+
+        df["score"] = 0.0
+        
+        # Compute weighted score
+        for col in numerical_cols:
+            weight = user_weights.get(col, 0)
+            if weight == 0:
+                continue  # skip columns the user hasn't weighted
+            
+            values = df[col]
+            
+            if column_directions.get(col) == "lower":
+                values = 1 - values  # flip for lower_is_better
+            
+            df["score"] += values * weight
+        
+        # Sort by score descending
+        df = df.sort_values("score", ascending=False).reset_index(drop=True)
+        df = df.drop_duplicates(subset="Institution Name", keep="first")
+
+        
+        return df
     sentiment_mapping = [1,2,3,4,5]
     
     # load in data
@@ -152,7 +189,7 @@ def main():
     student_body_size_selection = st.pills(
         "I prefer a...",
         student_body_sizes,
-        selection_mode="multi",
+        
         key="student_body"
     )
     student_body_size_importance = st.feedback("stars", key="student_body_importance")
@@ -214,13 +251,55 @@ def main():
     )
     tuition_importance = st.feedback("stars", key="tuition_importance")
 
+    user_weights = {
+        "Median Debt for Dependent Students": debt_importance,
+        "Median Debt for Independent Students": debt_importance,
+        "Average In-State Tuition for First-Time, Full-Time Undergraduates": tuition_importance,
+        "Out-of-State Average Tuition for First-Time, Full-Time Undergraduates": tuition_importance,
+        "Average Amount of Loans Awarded to First-Time, Full-Time Undergraduates": tuition_importance,
+        "Average Amount of Federal Grant Aid Awarded to First-Time, Full-Time Undergraduates": tuition_importance,
+        "Average Amount of Institutional Grant Aid Awarded to First-Time, Full-Time Undergraduates": tuition_importance,
+        "MSI Status": minority_serving_importance,        # will be ignored
+        "Average Work Study Award": tuition_importance,
+        "Affordability Gap (net price minus income earned working 10 hrs at min wage)": tuition_importance,
+    }
 
-    if st.button("GO!"):
-        # pass data to function
+    # Column directions (whether higher or lower is better)
+    column_directions = {
+        "Median Earnings of Students Working and Not Enrolled 10 Years After Entry": "higher",
+        "Median Debt for Dependent Students": "lower",
+        "Median Debt for Independent Students": "lower",
+        "Average In-State Tuition for First-Time, Full-Time Undergraduates": "lower",
+        "Out-of-State Average Tuition for First-Time, Full-Time Undergraduates": "lower",
+        "Average Amount of Loans Awarded to First-Time, Full-Time Undergraduates": "higher",
+        "Average Amount of Federal Grant Aid Awarded to First-Time, Full-Time Undergraduates": "higher",
+        "Average Amount of Institutional Grant Aid Awarded to First-Time, Full-Time Undergraduates": "higher",
+        "Institution Name": "ignore",
+        "MSI Status": "higher",
+        "Average Work Study Award": "higher",
+        "Affordability Gap (net price minus income earned working 10 hrs at min wage)": "lower",
+        "State Abbreviation": "ignore"
+    }
+
+    all_weights_filled = all(v is not None for v in user_weights.values())
+
+    # Disable button if any weight is None
+    if st.button("GO!", disabled=not all_weights_filled):
         colleges = process_inputs()
-        st.markdown(", ".join(map(str, colleges)))
+        merged = filter_to_found_colleges(colleges)
+        sorted_df = score_and_rank_schools(merged, user_weights, column_directions)
+        print(sorted_df.head(5))
+        ranked_colleges = sorted_df["Institution Name"].tolist()[:5]
+        scores = sorted_df["score"].tolist()[:5]
+        st.markdown(", ".join(map(str, ranked_colleges)))
+        st.markdown(", ".join(map(str, scores)))
+    else:
+        if not all_weights_filled:
+            st.info("Please fill out all the star ratings to enable the button.")
+        
+ 
 
-# given if the student wants in-state or out-of-state, return College IDs
+
 
 
     
