@@ -6,7 +6,7 @@ from sklearn.preprocessing import MinMaxScaler
 
 
 st.set_page_config(
-    page_title="Affordability Reality Engine",
+    page_title="College Finder",
     page_icon="🏫",
     layout="wide"
 )
@@ -124,9 +124,9 @@ def search_percent_by_race_ethnicity(institution, string):
         return pd.DataFrame()
   else:
     column_name = percent_and_race[string]
-  if len(college_results_cleaned["Institution Name"].str.contains(institution, case=False, na=False)) > 0:
-    sub = college_results_cleaned[
-        college_results_cleaned["Institution Name"].str.contains(institution, case=False, na=False)
+  if len(affordability_df["Institution Name"].str.contains(institution, case=False, na=False)) > 0:
+    sub = affordability_df[
+        affordability_df["Institution Name"].str.contains(institution, case=False, na=False)
     ]
   else:
     print(f"Invalid Institution: {institution}.")
@@ -159,9 +159,9 @@ def grad_rate_years(institution, num):
     if column_name is None:
         print(f"No general graduation rate column contains {num} years.")
         return pd.DataFrame()
-    matches = college_results_cleaned["Institution Name"].str.contains(institution, case=False, na=False)
+    matches = affordability_df["Institution Name"].str.contains(institution, case=False, na=False)
     if matches.sum() >= 1:
-      sub = college_results_cleaned[matches]
+      sub = affordability_df[matches]
     else:
       print(f"Invalid Institution: {institution}.")
       return pd.DataFrame()
@@ -172,9 +172,9 @@ def grad_rate_years(institution, num):
     return df
 
 def percent_nonresident(institution):
-  matches = college_results_cleaned["Institution Name"].str.contains(institution, case=False, na=False)
+  matches = affordability_df["Institution Name"].str.contains(institution, case=False, na=False)
   if matches.sum() >= 1:
-    sub = college_results_cleaned[matches]
+    sub = affordability_df[matches]
   else:
     print(f"Invalid Institution: {institution}.")
     return pd.DataFrame()
@@ -193,9 +193,9 @@ def percent_bachelors_by_race_ethnicity(institution, race, gender="Total"):
     if column_name is None:
         print(f"Invalid Race or Gender combination: {race} {gender}")
         return pd.DataFrame()
-    matches = college_results_cleaned["Institution Name"].str.contains(institution, case=False, na=False)
+    matches = affordability_df["Institution Name"].str.contains(institution, case=False, na=False)
     if matches.sum() >= 1:
-        sub = college_results_cleaned[matches]
+        sub = affordability_df[matches]
     else:
         print(f"Invalid Institution: {institution}.")
         return pd.DataFrame()
@@ -214,9 +214,9 @@ def percent_of_bachelors_by_field(institution, field):
     if column_name is None:
         print(f"Invalid Field: {field}")
         return pd.DataFrame()
-    matches = college_results_cleaned["Institution Name"].str.contains(institution, case=False, na=False)
+    matches = affordability_df["Institution Name"].str.contains(institution, case=False, na=False)
     if matches.sum() >= 1:
-        sub = college_results_cleaned[matches]
+        sub = affordability_df[matches]
     else:
         print(f"Invalid Institution: {institution}.")
         return pd.DataFrame()
@@ -235,9 +235,9 @@ def median_debt(institution, dependence):
     if column_name is None:
         print(f"Invalid Field: {dependence}")
         return pd.DataFrame()
-    matches = college_results_cleaned["Institution Name"].str.contains(institution, case=False, na=False)
+    matches = affordability_df["Institution Name"].str.contains(institution, case=False, na=False)
     if matches.sum() >= 1:
-        sub = college_results_cleaned[matches]
+        sub = affordability_df[matches]
     else:
         print(f"Invalid Institution: {institution}.")
         return pd.DataFrame()
@@ -256,9 +256,9 @@ def tuition_by_state_status(institution, status="Out"):
     if column_name is None:
         print(f"Invalid Field: {status}")
         return pd.DataFrame()
-    matches = college_results_cleaned["Institution Name"].str.contains(institution, case=False, na=False)
+    matches = affordability_df["Institution Name"].str.contains(institution, case=False, na=False)
     if matches.sum() >= 1:
-        sub = college_results_cleaned[matches]
+        sub = affordability_df[matches]
     else:
         print(f"Invalid Institution: {institution}.")
         return pd.DataFrame()
@@ -284,9 +284,9 @@ def affordability_gap_df(institution):
   return df
 
 def school_size(institution):
-  matches = college_results_cleaned["Institution Name"].str.contains(institution, case=False, na=False)
+  matches = affordability_df["Institution Name"].str.contains(institution, case=False, na=False)
   if matches.sum() >= 1:
-    sub = college_results_cleaned[matches].copy()
+    sub = affordability_df[matches].copy()
   else:
     print(f"Invalid Institution: {institution}.")
     return pd.DataFrame()
@@ -477,7 +477,7 @@ def main():
     
     # load in data
 
-    st.title("Affordability Reality Engine")
+    st.title("College Finder")
 
     # -------------------------
     # State of Residence
