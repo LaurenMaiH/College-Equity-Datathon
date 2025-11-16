@@ -100,13 +100,13 @@ def search_msi(name):
     print(f"Invalid MSI type: {name}. Available types are: {', '.join(MSI_Type.keys())}")
     return pd.DataFrame() # Return an empty DataFrame for invalid input
   column_name = MSI_Type[name]
-  filtered_colleges = college_results_cleaned[college_results_cleaned[column_name] == 1]
-  return filtered_colleges['Institution Name']
+  filtered_colleges = affordability_df[affordability_df[column_name] == 1]
+  return filtered_colleges['Unit ID']
 
 def is_msi(institution):
-    matches = college_results_cleaned["Institution Name"].str.contains(institution, case=False, na=False)
+    matches = affordability_df["Unit ID"].str.contains(institution, case=False, na=False)
     if matches.sum() >= 1:
-        sub = college_results_cleaned[matches].copy()
+        sub = affordability_df[matches].copy()
     else:
         print(f"Invalid Institution: {institution}.")
         return pd.DataFrame()
@@ -309,18 +309,22 @@ def school_size(institution):
     })
   return df
 
-def priv_or_pub(institution):
-  matches = affordability_gap["Institution Name"].str.contains(institution, case=False, na=False)
-  if matches.sum() >= 1:
-      sub = affordability_gap[matches]
-  else:
-      print(f"Invalid Institution: {institution}.")
-      return pd.DataFrame()
-  df = pd.DataFrame({
-      "Institution Name": sub["Institution Name"],
-      'Sector': sub['Sector Name']
-  })
-  return df
+def priv_or_pub():
+    filtered_df = affordability_df[affordability_df['Sector']]
+    filtered_ids = filtered_df["Unit ID"].tolist()
+    return filtered_ids 
+
+    matches = affordability_gap["Institution Name"].str.contains(institution, case=False, na=False)
+    if matches.sum() >= 1:
+        sub = affordability_gap[matches]
+    else:
+        print(f"Invalid Institution: {institution}.")
+        return pd.DataFrame()
+    df = pd.DataFrame({
+        "Institution Name": sub["Institution Name"],
+        'Sector': sub['Sector Name']
+    })
+    return df
 
 def main():
     def filter_by_state():
@@ -390,7 +394,7 @@ def main():
         return within_range_ids.tolist()
     
     def filter_by_minority_serving():
-        filtered_df = affordability_df[affordability_df['MSI Status']== 1]
+        filtered_df = affordability_df[affordability_df['MSI Status']== 0]
         filtered_ids = filtered_df["Unit ID"].tolist()
         return filtered_ids    
 
@@ -627,7 +631,7 @@ def display_college_stats(institution):
     col1, col2, col3 = st.columns(3)
     col1.metric("State", aff_row["State Abbreviation"])
     col2.metric("Undergrad Enrollment", f"{sel_row['Number of Undergraduates Enrolled']:,}")
-    col3.metric("MSI Status", "Yes" if aff_row["MSI Status"] == 1 else "No")
+    col3.metric("MSI Status", "Yes" if aff_row["MSI Status"] == 0 else "No")
 
     st.divider()
     # ============ TUITION CHART ===============
@@ -644,6 +648,7 @@ def display_college_stats(institution):
     st.subheader("Median Student Debt")
     st.metric("Debt", f"${sel_row['Median Debt for Dependent Students']:,}")
     # ============ DEMOGRAPHICS ===============
+    st.subheader("Percent Undergraduates Enrolled by Race or Ethnicity")
     race_labels = [
     "American Indian / Alaska Native",       
     "2+ Races",
