@@ -423,12 +423,18 @@ def main():
         return college_ids
 
     def filter_to_found_colleges(ids):
+        if not ids:
+            st.warning("No colleges found after filtering")
+            return pd.DataFrame()
         filtered_college = college_selected_raw[college_selected_raw["UNIQUE_IDENTIFICATION_NUMBER_OF_THE_INSTITUTION"].isin(ids)][["UNIQUE_IDENTIFICATION_NUMBER_OF_THE_INSTITUTION","Median Earnings of Students Working and Not Enrolled 10 Years After Entry", "Median Debt for Dependent Students","Median Debt for Independent Students","Average In-State Tuition for First-Time, Full-Time Undergraduates","Out-of-State Average Tuition for First-Time, Full-Time Undergraduates","Average Amount of Loans Awarded to First-Time, Full-Time Undergraduates","Average Amount of Federal Grant Aid Awarded to First-Time, Full-Time Undergraduates","Average Amount of Institutional Grant Aid Awarded to First-Time, Full-Time Undergraduates"]]
         filtered_affordability = affordability_df[affordability_df["Unit ID"].isin(ids)][["Unit ID","Institution Name","MSI Status","Average Work Study Award","Affordability Gap (net price minus income earned working 10 hrs at min wage)","State Abbreviation"]]
         merged = filtered_college.merge(filtered_affordability, left_on="UNIQUE_IDENTIFICATION_NUMBER_OF_THE_INSTITUTION", right_on="Unit ID", how="inner")
         #normalize cols
+        if merged.empty:
+            st.warning("No colleges matched after merging datasets.")
+            return pd.DataFrame()
         numerical_cols = merged.select_dtypes(include=['number']).columns
-        numerical_cols = numerical_cols.drop("UNIQUE_IDENTIFICATION_NUMBER_OF_THE_INSTITUTION")
+        numerical_cols = numerical_cols.drop("UNIQUE_IDENTIFICATION_NUMBER_OF_THE_INSTITUTION", errors="ignore")
         scaler = MinMaxScaler()
         merged[numerical_cols] = scaler.fit_transform(merged[numerical_cols])
         
@@ -583,10 +589,16 @@ def main():
         merged = filter_to_found_colleges(colleges)
         sorted_df = score_and_rank_schools(merged, user_weights, column_directions)
         print(sorted_df.head(5))
-        ranked_colleges = sorted_df["Institution Name"].tolist()[:5]
+        st.session_state.ranked_colleges = sorted_df["Institution Name"].tolist()[:5]
         scores = sorted_df["score"].tolist()[:5]
-        st.markdown(", ".join(map(str, ranked_colleges)))
+        st.markdown(", ".join(map(str, st.session_state.ranked_colleges)))
         st.markdown(", ".join(map(str, scores)))
+        if st.session_state.ranked_colleges:
+            st.session_state.selected = st.selectbox(
+                "Choose a college:",st.session_state.ranked_colleges
+            )
+            if st.session_state.selected:
+                display_college_stats(st.session_state.selected)
     else:
         if not all_weights_filled:
             st.info("Please fill out all the star ratings to enable the button.")
@@ -595,7 +607,7 @@ def main():
 
 
 
-# -------------------------
+    # -------------------------
     # Display Metrics
     # -------------------------  
 
@@ -658,14 +670,6 @@ def display_college_stats(institution):
     })
     st.bar_chart(race_ethnicity_percent_data, x="Race / Ethnicity", y="Percentage")
     # ============ BACHELOR DEGREES BY RACE GENDER ===============
-
-
-
-    
-
-
-
-
 
 
 
