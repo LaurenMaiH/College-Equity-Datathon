@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
 
 st.set_page_config(
     page_title="Affordability Reality Engine",
@@ -11,7 +12,313 @@ st.set_page_config(
 affordability_df =  pd.read_csv("affordability_raw.csv")
 college_selected_raw = pd.read_csv("college_selected_raw.csv")
 
+# Global variables (copied from notebook)
+MSI_Type = {
+    'HBCU': 'Historically Black College or University (HBCU)',
+    'AANAPISI': 'Asian American or Native American Pacific Islander-Serving Institution (AANAPISI)',
+    'ANNHSI': 'Alaska-Native, Native Hawaiian-Serving Institution (ANNHSI)',
+    'HSI': 'Hispanic-serving Institution (HSI)',
+    'NANTI': 'Native American Non-Tribal Institution (NANTI)',
+    'PBI': 'Predominantly Black Institution (PBI)',
+    'TCU': 'Tribal College or University (TCU)'
+}
 
+Race_Ethnicity_Keywords = ['American Indian', 'Alaska Native', 'Two or More Races', 'Asian', 'Black', 'African American', 'Latino',
+                'Native Hawaiian', 'Other Pacific Islander', 'White', 'Race-Ethnicity Unknown']
+
+percent_and_race = {"American Indian": "Percent of American Indian or Alaska Native Undergraduates",
+                    "Alaska Native:": "Percent of American Indian or Alaska Native Undergraduates",
+                    "Two or More Races": "Percent of Two or More Races Undergraduates",
+                    "Asian": "Percent of Asian Undergraduates",
+                    "Black": "Percent of Black or African American Undergraduates",
+                    "African American": "Percent of Black or African American Undergraduates",
+                    "Latino": "Percent of Latino Undergraduates",
+                    "Native Hawaiian": "Percent of Native Hawaiian or Other Pacific Islander Undergraduates",
+                    "Other Pacific Islander": "Percent of Native Hawaiian or Other Pacific Islander Undergraduates",
+                    "White": "Percent of White Undergraduates",
+                    "Race-Ethnicity Unknown": "Percent of Race-Ethnicity Unknown Undergraduates"
+}
+
+degree_years = [
+    "Bachelor's Degree Graduation Rate Within 4 Years - Total",
+    "Bachelor's Degree Graduation Rate Within 5 Years - Total",
+    "Bachelor's Degree Graduation Rate Within 6 Years - American Indian or Alaska Native",
+    "Bachelor's Degree Graduation Rate Within 6 Years - Asian, Native Hawaiian, Pacific Islander",
+    "Bachelor's Degree Graduation Rate Within 6 Years - Asian",
+    "Bachelor's Degree Graduation Rate Within 6 Years - Black, Non-Latino",
+    "Bachelor's Degree Graduation Rate Within 6 Years - Latino",
+    "Bachelor's Degree Graduation Rate Within 6 Years - Men",
+    "Bachelor's Degree Graduation Rate Within 6 Years - Native Hawaiian or Other Pacific Islander",
+    "Bachelor's Degree Graduation Rate Bachelor Degree Within 6 Years - Total",
+    "Bachelor's Degree Graduation Rate Bachelor Degree Within 6 Years - Women",
+    "Bachelor's Degree Graduation Rate Within 6 Years - White Non-Latino"
+]
+
+percent_bachelors_by_race = [
+    "Percent of Bachelor Degrees American Indian or Alaska Native Men",
+    "Percent of Bachelor Degrees American Indian or Alaska Native Total",
+    "Percent of Bachelor Degrees American Indian or Alaska Native Women",
+    "Percent of Bachelor Degrees Asian Men",
+    "Percent of Bachelor Degrees Asian Total",
+    "Percent of Bachelor Degrees Asian Women",
+    "Percent of Bachelor Degrees Black or African American Men",
+    "Percent of Bachelor Degrees Black or African American Total",
+    "Percent of Bachelor Degrees Black or African American Women",
+    "Percent of Bachelor Degrees Latino Men",
+    "Percent of Bachelor Degrees Latino Total",
+    "Percent of Bachelor Degrees Latina Women",
+    "Percent of Bachelor Degrees Native Hawaiian or Other Pacific Islander Men",
+    "Percent of Bachelor Degrees Native Hawaiian or Other Pacific Islander Total",
+    "Percent of Bachelor Degrees Native Hawaiian or Other Pacific Islander Women",
+    "Percent of Bachelor Degrees Women",
+    "Percent of Bachelor Degrees Men",
+    "Percent of Bachelor Degrees White Total",
+    "Percent of Bachelor Degrees White Men",
+    "Percent of Bachelor Degrees White Women"
+]
+
+percent_bachelors_by_field = [
+    "Percent of Bachelor Degrees Awarded in Science, Technology, Engineering, and Math",
+    "Percent of Bachelor Degrees Awarded in Arts and Humanities",
+    "Percent of Bachelor Degrees Awarded in Education",
+    "Percent of Bachelor Degrees Awarded in Social Sciences",
+    "Percent of Bachelor Degrees Awarded in Health Sciences",
+    "Percent of Bachelor Degrees Awarded in Business"
+]
+
+dependent_independent = ["Median Debt for Dependent Students", "Median Debt for Independent Students"]
+
+instate_outstate = ["Average In-State Tuition for First-Time, Full-Time Undergraduates",
+                    "Out-of-State Average Tuition for First-Time, Full-Time Undergraduates"]
+
+# Function definitions (copied from notebook)
+
+def search_msi(name):
+  if name not in MSI_Type:
+    print(f"Invalid MSI type: {name}. Available types are: {', '.join(MSI_Type.keys())}")
+    return pd.DataFrame() # Return an empty DataFrame for invalid input
+  column_name = MSI_Type[name]
+  filtered_colleges = college_results_cleaned[college_results_cleaned[column_name] == 1]
+  return filtered_colleges['Institution Name']
+
+def is_msi(institution):
+    matches = college_results_cleaned["Institution Name"].str.contains(institution, case=False, na=False)
+    if matches.sum() >= 1:
+        sub = college_results_cleaned[matches].copy()
+    else:
+        print(f"Invalid Institution: {institution}.")
+        return pd.DataFrame()
+    msi_columns = list(MSI_Type.values())
+    sub['Minority Serving Institution'] = (sub[msi_columns] == 1).any(axis=1)
+    df = pd.DataFrame({
+      "Institution Name": sub["Institution Name"],
+      "Minority Serving Institution": sub['Minority Serving Institution']
+    })
+    return df
+
+def search_percent_by_race_ethnicity(institution, string):
+  if string not in percent_and_race:
+        print(f"Invalid Race or Ethnicity: {string}. Available Race and Ethnicity options are: {', '.join(percent_and_race.keys())}")
+        return pd.DataFrame()
+  else:
+    column_name = percent_and_race[string]
+  if len(college_results_cleaned["Institution Name"].str.contains(institution, case=False, na=False)) > 0:
+    sub = college_results_cleaned[
+        college_results_cleaned["Institution Name"].str.contains(institution, case=False, na=False)
+    ]
+  else:
+    print(f"Invalid Institution: {institution}.")
+    return pd.DataFrame()
+  # Find the graduation rate column specific to the race, if it exists
+  grad_column_name = next(
+      (col for col in degree_years
+        if string.lower() in col.lower() and '6 years - total' not in col.lower()), # Exclude general 6-year total
+      None
+  )
+  # If no specific grad column for race, default to total 6-year graduation rate
+  if grad_column_name is None:
+      grad_column_name = "Bachelor's Degree Graduation Rate Bachelor Degree Within 6 Years - Total"
+      
+  df = pd.DataFrame({
+      "Institution Name": sub["Institution Name"],
+      percent_and_race[string]: sub[column_name],
+      "Bachelor's Degree Graduation Rate Within 4 Years - Total": sub["Bachelor's Degree Graduation Rate Within 4 Years - Total"],
+      "Bachelor's Degree Graduation Rate Within 5 Years - Total": sub["Bachelor's Degree Graduation Rate Within 5 Years - Total"],
+      "Bachelor's Degree Graduation Rate Bachelor Degree Within 6 Years - Total": sub["Bachelor's Degree Graduation Rate Bachelor Degree Within 6 Years - Total"],
+      f"Graduation Rate ({string} Specific)": sub[grad_column_name]
+  })
+  return df
+
+def grad_rate_years(institution, num):
+    column_name = next(
+        (col for col in degree_years if str(num) in col and "Total" in col), # Ensuring we pick the 'Total' for general years
+        None
+    )
+    if column_name is None:
+        print(f"No general graduation rate column contains {num} years.")
+        return pd.DataFrame()
+    matches = college_results_cleaned["Institution Name"].str.contains(institution, case=False, na=False)
+    if matches.sum() >= 1:
+      sub = college_results_cleaned[matches]
+    else:
+      print(f"Invalid Institution: {institution}.")
+      return pd.DataFrame()
+    df = pd.DataFrame({
+        "Institution Name": sub["Institution Name"],
+        column_name: sub[column_name]
+    })
+    return df
+
+def percent_nonresident(institution):
+  matches = college_results_cleaned["Institution Name"].str.contains(institution, case=False, na=False)
+  if matches.sum() >= 1:
+    sub = college_results_cleaned[matches]
+  else:
+    print(f"Invalid Institution: {institution}.")
+    return pd.DataFrame()
+  df = pd.DataFrame({
+      "Institution Name": sub["Institution Name"],
+      "Percent of Nonresident Undergraduates": sub["Percent of Nonresident Undergraduates"]
+  })
+  return df
+
+def percent_bachelors_by_race_ethnicity(institution, race, gender="Total"):
+    column_name = next(
+        (col for col in percent_bachelors_by_race
+         if race.lower() in col.lower() and gender.lower() in col.lower()),
+        None
+    )
+    if column_name is None:
+        print(f"Invalid Race or Gender combination: {race} {gender}")
+        return pd.DataFrame()
+    matches = college_results_cleaned["Institution Name"].str.contains(institution, case=False, na=False)
+    if matches.sum() >= 1:
+        sub = college_results_cleaned[matches]
+    else:
+        print(f"Invalid Institution: {institution}.")
+        return pd.DataFrame()
+    df = pd.DataFrame({
+        "Institution Name": sub["Institution Name"],
+        column_name: sub[column_name]
+    })
+    return df
+
+def percent_of_bachelors_by_field(institution, field):
+    column_name = next(
+        (col for col in percent_bachelors_by_field
+         if field.lower() in col.lower()),
+        None
+    )
+    if column_name is None:
+        print(f"Invalid Field: {field}")
+        return pd.DataFrame()
+    matches = college_results_cleaned["Institution Name"].str.contains(institution, case=False, na=False)
+    if matches.sum() >= 1:
+        sub = college_results_cleaned[matches]
+    else:
+        print(f"Invalid Institution: {institution}.")
+        return pd.DataFrame()
+    df = pd.DataFrame({
+        "Institution Name": sub["Institution Name"],
+        column_name: sub[column_name]
+    })
+    return df
+
+def median_debt(institution, dependence):
+    column_name = next(
+        (col for col in dependent_independent
+         if dependence.lower() in col.lower()),
+        None
+    )
+    if column_name is None:
+        print(f"Invalid Field: {dependence}")
+        return pd.DataFrame()
+    matches = college_results_cleaned["Institution Name"].str.contains(institution, case=False, na=False)
+    if matches.sum() >= 1:
+        sub = college_results_cleaned[matches]
+    else:
+        print(f"Invalid Institution: {institution}.")
+        return pd.DataFrame()
+    df = pd.DataFrame({
+        "Institution Name": sub["Institution Name"],
+        column_name: sub[column_name]
+    })
+    return df
+
+def tuition_by_state_status(institution, status="Out"):
+    column_name = next(
+        (col for col in instate_outstate
+         if status.lower() in col.lower()),
+        None
+    )
+    if column_name is None:
+        print(f"Invalid Field: {status}")
+        return pd.DataFrame()
+    matches = college_results_cleaned["Institution Name"].str.contains(institution, case=False, na=False)
+    if matches.sum() >= 1:
+        sub = college_results_cleaned[matches]
+    else:
+        print(f"Invalid Institution: {institution}.")
+        return pd.DataFrame()
+    df = pd.DataFrame({
+        "Institution Name": sub["Institution Name"],
+        column_name: sub[column_name]
+    })
+    return df
+
+def affordability_gap_df(institution):
+  matches = affordability_gap["Institution Name"].str.contains(institution, case=False, na=False)
+  if matches.sum() >= 1:
+    sub = affordability_gap[matches]
+  else:
+    print(f"Invalid Institution: {institution}.")
+    return pd.DataFrame()
+  df = pd.DataFrame({
+        "Institution Name": sub["Institution Name"],
+        "Affordability Gap (net price minus income earned working 10 hrs at min wage)": sub["Affordability Gap (net price minus income earned working 10 hrs at min wage)"],
+        "Weekly Hours to Close Gap": sub["Weekly Hours to Close Gap"],
+        "Income Earned from Working 10 Hours a Week at State's Minimum Wage": sub["Income Earned from Working 10 Hours a Week at State's Minimum Wage"],
+    })
+  return df
+
+def school_size(institution):
+  matches = college_results_cleaned["Institution Name"].str.contains(institution, case=False, na=False)
+  if matches.sum() >= 1:
+    sub = college_results_cleaned[matches].copy()
+  else:
+    print(f"Invalid Institution: {institution}.")
+    return pd.DataFrame()
+
+  def classify_size(num_undergrads):
+    if pd.isna(num_undergrads):
+        return np.nan
+    if num_undergrads <= 5000:
+      return 'Small'
+    elif num_undergrads <= 15000:
+      return 'Medium'
+    else:
+      return "Large"
+
+  sub["Size"] = sub["Number of Undergraduates Enrolled"].apply(classify_size)
+
+  df = pd.DataFrame({
+        "Institution Name": sub["Institution Name"],
+        "Size": sub["Size"]
+    })
+  return df
+
+def priv_or_pub(institution):
+  matches = affordability_gap["Institution Name"].str.contains(institution, case=False, na=False)
+  if matches.sum() >= 1:
+      sub = affordability_gap[matches]
+  else:
+      print(f"Invalid Institution: {institution}.")
+      return pd.DataFrame()
+  df = pd.DataFrame({
+      "Institution Name": sub["Institution Name"],
+      'Sector': sub['Sector Name']
+  })
+  return df
 
 def main():
     def filter_by_state():
@@ -110,12 +417,9 @@ def main():
         minority_serving_colleges = filter_by_minority_serving()
         size_colleges = filter_by_size(student_body_size_selection)
 
-
-
         college_ids = set(state_colleges) & set(tuition_colleges) & set(debt_colleges) & set(minority_serving_colleges) & set(size_colleges)
         college_names_df = affordability_df[affordability_df["Unit ID"].isin(college_ids)]
         college_names = list(set(college_names_df["Institution Name"].tolist()))
-
 
         return college_names
 
@@ -279,10 +583,40 @@ def display_college_stats(institution):
     # ============ DEBT ===============
     st.subheader("Median Student Debt")
     st.metric("Debt", f"${sel_row['Median Debt for Dependent Students']:,}")
-    # ============ ADD MORE VISUALIZATIONS ===============
-    # Example: donut, stacked bar, etc.
+    # ============ DEMOGRAPHICS ===============
+    race_columns = [
+        "Percent of American Indian or Alaska Native Undergraduates",
+        "Percent of Two or More Races Undergraduates",
+        "Percent of Asian Undergraduates",
+        "Percent of Black or African American Undergraduates",
+        "Percent of Latino Undergraduates",
+        "Percent of Native Hawaiian or Other Pacific Islander Undergraduates",
+        "Percent of White Undergraduates",
+        "Percent of Undergraduates Race-Ethnicity Unknown"
+    ]
 
-    
+    race_labels = [
+    "American Indian / Alaska Native",       
+    "2+ Races",
+    "Asian",
+    "Black",
+    "Latino",
+    "Native Hawaiian / Pacific Islander",       
+    "White",
+    "Unknown"
+    ]
+    st.subheader("Race and Ethnicity Distribution of Enrolled Students")
+    values = [sel_row[col] for col in race_columns]
+
+    fig, ax = plt.subplots(figsize=(10,6))
+    ax.bar(race_labels, values, color='skyblue')
+    ax.set_ylabel("Percentage")
+    ax.set_xlabel("Race / Ethnicity")
+    ax.set_title("Undergraduate Race and Ethnicity Distribution")
+    plt.xticks(rotation=90, ha='right')
+    st.pyplot(fig)
+    # ============ BACHELOR DEGREES BY RACE GENDER ===============
+
 
 
     
