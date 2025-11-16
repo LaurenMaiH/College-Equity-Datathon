@@ -584,17 +584,6 @@ def display_college_stats(institution):
     st.subheader("Median Student Debt")
     st.metric("Debt", f"${sel_row['Median Debt for Dependent Students']:,}")
     # ============ DEMOGRAPHICS ===============
-    race_columns = [
-        "Percent of American Indian or Alaska Native Undergraduates",
-        "Percent of Two or More Races Undergraduates",
-        "Percent of Asian Undergraduates",
-        "Percent of Black or African American Undergraduates",
-        "Percent of Latino Undergraduates",
-        "Percent of Native Hawaiian or Other Pacific Islander Undergraduates",
-        "Percent of White Undergraduates",
-        "Percent of Undergraduates Race-Ethnicity Unknown"
-    ]
-
     race_labels = [
     "American Indian / Alaska Native",       
     "2+ Races",
@@ -605,16 +594,21 @@ def display_college_stats(institution):
     "White",
     "Unknown"
     ]
-    st.subheader("Race and Ethnicity Distribution of Enrolled Students")
-    values = [sel_row[col] for col in race_columns]
-
-    fig, ax = plt.subplots(figsize=(10,6))
-    ax.bar(race_labels, values, color='skyblue')
-    ax.set_ylabel("Percentage")
-    ax.set_xlabel("Race / Ethnicity")
-    ax.set_title("Undergraduate Race and Ethnicity Distribution")
-    plt.xticks(rotation=90, ha='right')
-    st.pyplot(fig)
+    race_label_to_column = {
+    "American Indian / Alaska Native": "Percent of American Indian or Alaska Native Undergraduates",
+    "2+ Races": "Percent of Two or More Races Undergraduates",
+    "Asian": "Percent of Asian Undergraduates",
+    "Black": "Percent of Black or African American Undergraduates",
+    "Latino": "Percent of Latino Undergraduates",
+    "Native Hawaiian / Pacific Islander": "Percent of Native Hawaiian or Other Pacific Islander Undergraduates",
+    "White": "Percent of White Undergraduates",
+    "Unknown": "Percent of Undergraduates Race-Ethnicity Unknown"
+    }
+    race_ethnicity_percent_data = pd.DataFrame({
+    "Race / Ethnicity": race_labels,
+    "Percentage": [sel_row[race_label_to_column[label]] for label in race_labels]
+    })
+    st.bar_chart(race_ethnicity_percent_data, x="Race / Ethnicity", y="Percentage")
     # ============ BACHELOR DEGREES BY RACE GENDER ===============
 
 
