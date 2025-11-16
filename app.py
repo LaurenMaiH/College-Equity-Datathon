@@ -215,12 +215,74 @@ def main():
     tuition_importance = st.feedback("stars", key="tuition_importance")
 
 
+    # -------------------------
+    # GO
+    # -------------------------
+    if "show_colleges" not in st.session_state:
+        st.session_state.show_colleges = False
+
+    if "colleges" not in st.session_state:
+        st.session_state.colleges = []
+
     if st.button("GO!"):
-        # pass data to function
-        colleges = process_inputs()
-        st.markdown(", ".join(map(str, colleges)))
+        st.session_state.show_colleges = True
+        st.session_state.colleges = process_inputs()
+
+    if st.session_state.show_colleges:
+        colleges = st.session_state.colleges
+
+        if not colleges:
+            st.warning("No colleges match your criteria.")
+        else:
+            selected_college = st.selectbox(
+                "Select a college to view stats:",
+                colleges,
+                key="college_selector"
+            )
+            display_college_stats(selected_college)
 
 # given if the student wants in-state or out-of-state, return College IDs
+
+# -------------------------
+    # Display Metrics
+    # -------------------------  
+
+def display_college_stats(institution):
+    # Find rows in both datasets
+    aff_row = affordability_df[affordability_df["Institution Name"] == institution].iloc[0]
+    # Some datasets use different IDs—match using Unit ID
+    college_id = aff_row["Unit ID"]
+    sel_row = college_selected_raw[college_selected_raw["UNIQUE_IDENTIFICATION_NUMBER_OF_THE_INSTITUTION"] == college_id]
+    if sel_row.empty:
+        st.error("No detailed statistics found for this institution.")
+        return
+    sel_row = sel_row.iloc[0]
+    st.markdown(f"## 📊 {institution} — Stats Overview")
+
+    # ============ BASIC INFO ===============
+    col1, col2, col3 = st.columns(3)
+    col1.metric("State", aff_row["State Abbreviation"])
+    col2.metric("Undergrad Enrollment", f"{sel_row['Number of Undergraduates Enrolled']:,}")
+    col3.metric("MSI Status", "Yes" if aff_row["MSI Status"] == 1 else "No")
+
+    st.divider()
+    # ============ TUITION CHART ===============
+    st.subheader("Tuition Comparison")
+    tuition_data = pd.DataFrame({
+        "State Status": ["In-State Tuition", "Out-of-State Tuition"],
+        "Cost": [
+            sel_row["Average In-State Tuition for First-Time, Full-Time Undergraduates"],
+            sel_row["Out-of-State Average Tuition for First-Time, Full-Time Undergraduates"]
+        ]
+    })
+    st.bar_chart(tuition_data, x="State Status", y="Cost")
+    # ============ DEBT ===============
+    st.subheader("Median Student Debt")
+    st.metric("Debt", f"${sel_row['Median Debt for Dependent Students']:,}")
+    # ============ ADD MORE VISUALIZATIONS ===============
+    # Example: donut, stacked bar, etc.
+
+    
 
 
     
